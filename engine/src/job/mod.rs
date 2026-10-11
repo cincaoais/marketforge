@@ -3,6 +3,7 @@ mod instrument;
 mod integrity;
 mod load;
 mod merge;
+mod merge_load;
 mod model;
 mod normalization;
 mod operation;
@@ -12,6 +13,13 @@ mod resources;
 mod stream;
 mod task;
 mod validate;
+
+pub use merge::{
+    MergeJob, MergeOperation, MergeOutput, MergeParquetConfig, MergePartitioning, MergeResources,
+    MergeTimeRange,
+};
+
+pub use merge_load::load_merge_job;
 
 pub use ids::{DatasetId, JobId};
 
@@ -36,8 +44,6 @@ pub use output::{ContentType, OutputConfig};
 pub use instrument::{ContractKind, InstrumentKind, InstrumentSpec};
 
 pub use normalization::{NormalizationConfig, QuantityEncoding, TargetSchema, TimestampEncoding};
-
-pub use merge::{DatasetType, MergeInput, TimeRange};
 
 pub use integrity::{
     IntegrityAction, IntegrityCategory, IntegrityPolicy, IntegrityRule, IntegrityWindowRule,

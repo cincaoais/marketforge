@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    DatasetId, IntegrityPolicy, JobId, MergeInput, OrderingConfig, OutputConfig,
-    ProcessingOperation, ResourceConfig, StreamConfig, TimeRange, WorkTask,
+    DatasetId, IntegrityPolicy, JobId, OrderingConfig, OutputConfig, ProcessingOperation,
+    ResourceConfig, StreamConfig, WorkTask,
 };
 
 pub const PROCESSING_PROTOCOL_VERSION: u32 = 1;
@@ -16,7 +16,6 @@ pub struct ProcessingJob {
     pub operation: ProcessingOperation,
 
     pub tasks: Vec<WorkTask>,
-    pub merge_inputs: Vec<MergeInput>,
 
     pub streams: Vec<StreamConfig>,
     pub ordering: OrderingConfig,
@@ -24,6 +23,4 @@ pub struct ProcessingJob {
     pub integrity_policy: IntegrityPolicy,
     pub resources: ResourceConfig,
     pub output: OutputConfig,
-
-    pub time_range: Option<TimeRange>,
 }

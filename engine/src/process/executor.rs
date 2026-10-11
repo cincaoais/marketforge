@@ -16,7 +16,8 @@ use super::{
     metrics::{IntegrityEvaluation, ProcessingMetricsReport, evaluate_integrity_policy},
 };
 use super::{
-    scheduler::execute_parallel,
+    resources::{ResourceBudget, estimate_task_resources},
+    scheduler::execute_parallel_budgeted,
     task::{TaskExecution, execute_task},
 };
 
@@ -40,13 +41,6 @@ pub fn execute_processing_job(
 
     match job.operation {
         ProcessingOperation::Process => execute_process(job, config),
-
-        ProcessingOperation::Merge => Ok(ProcessingResult::failed(
-            job.job_id,
-            job.dataset_id,
-            ProcessingErrorCode::ProcessingFailure,
-            "merge execution is not implemented yet",
-        )),
     }
 }
 
@@ -55,24 +49,58 @@ pub fn execute_processing_job(
 // -----------------------------------------------------------------------------
 
 fn execute_process(job: &ProcessingJob, config: &ProcessingConfig) -> Result<ProcessingResult> {
-    if job.output.content_type != ContentType::Trades {
-        return Ok(ProcessingResult::failed(
-            job.job_id,
-            job.dataset_id,
-            ProcessingErrorCode::ProcessingFailure,
-            "only trade processing is currently implemented",
-        ));
-    }
+    // -------------------------------------------------------------------------
+    // Validate output content type
+    // -------------------------------------------------------------------------
 
-    // Reject unsupported task configurations before creating staging.
+    let expected_target = match job.output.content_type {
+        ContentType::Trades => TargetSchema::Trade,
+        ContentType::Depth => TargetSchema::Depth,
+
+        ContentType::Combined => {
+            return Ok(ProcessingResult::failed(
+                job.job_id,
+                job.dataset_id,
+                ProcessingErrorCode::InvalidJob,
+                "combined processing output is not supported yet",
+            ));
+        }
+    };
+
+    // -------------------------------------------------------------------------
+    // Validate task normalization targets
+    // -------------------------------------------------------------------------
+
     for task in &job.tasks {
-        let trade_normalizations = task
+        if task.normalizations.is_empty() {
+            return Ok(ProcessingResult::failed(
+                job.job_id,
+                job.dataset_id,
+                ProcessingErrorCode::InvalidJob,
+                format!(
+                    "task {} contains no normalization configurations",
+                    task.task_id.0
+                ),
+            ));
+        }
+
+        if task
             .normalizations
             .iter()
-            .filter(|normalization| normalization.target_schema == TargetSchema::Trade)
-            .count();
+            .any(|normalization| normalization.target_schema != expected_target)
+        {
+            return Ok(ProcessingResult::failed(
+                job.job_id,
+                job.dataset_id,
+                ProcessingErrorCode::InvalidJob,
+                format!(
+                    "task {} normalization target does not match job content type",
+                    task.task_id.0
+                ),
+            ));
+        }
 
-        if trade_normalizations != 1 || task.normalizations.len() != 1 {
+        if expected_target == TargetSchema::Trade && task.normalizations.len() != 1 {
             return Ok(ProcessingResult::failed(
                 job.job_id,
                 job.dataset_id,
@@ -96,7 +124,7 @@ fn execute_process(job: &ProcessingJob, config: &ProcessingConfig) -> Result<Pro
 
     let mut context = ExecutionContext::default();
 
-    let result = process_trade_tasks(job, config, &mut context);
+    let result = process_tasks(job, config, &mut context);
 
     match result {
         Ok(result) => Ok(result),
@@ -156,16 +184,23 @@ pub(crate) fn persist_processing_failure(
 // Task scheduling
 // -----------------------------------------------------------------------------
 
-fn process_trade_tasks(
+fn process_tasks(
     job: &ProcessingJob,
     config: &ProcessingConfig,
     context: &mut ExecutionContext,
 ) -> Result<ProcessingResult> {
     let staging = &job.output.staging_path;
 
-    let executions = execute_parallel(
+    let budget = ResourceBudget::new(
+        config.resources.memory_budget_bytes,
+        config.resources.scratch_budget_bytes,
+    )?;
+
+    let executions = execute_parallel_budgeted(
         job.tasks.iter().collect::<Vec<_>>(),
-        config.resources.workers as usize,
+        config.resources.workers,
+        &budget,
+        |task| estimate_task_resources(task, &config.resources.parquet),
         |task| Ok(execute_task(task, config, staging)),
     )?;
 
@@ -383,13 +418,7 @@ pub(crate) fn commit_dataset(staging: &Path, dataset_path: &Path) -> Result<()> 
     Ok(())
 }
 
-// -----------------------------------------------------------------------------
-// Staging preparation
-// -----------------------------------------------------------------------------
-
-pub(crate) fn prepare_staging(job: &ProcessingJob) -> Result<()> {
-    let path = &job.output.staging_path;
-
+pub(crate) fn prepare_staging_path(path: &Path) -> Result<()> {
     if path.exists() {
         return Err(MarketForgeError::InvalidConfiguration(format!(
             "staging path already exists: {}",
@@ -405,4 +434,12 @@ pub(crate) fn prepare_staging(job: &ProcessingJob) -> Result<()> {
     })?;
 
     Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// Staging preparation
+// -----------------------------------------------------------------------------
+
+pub(crate) fn prepare_staging(job: &ProcessingJob) -> Result<()> {
+    prepare_staging_path(&job.output.staging_path)
 }

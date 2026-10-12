@@ -170,10 +170,10 @@ def verify_raw_file(
 
     record = read_raw_record(raw_path)
 
-    if expected_remote_file is not None and record.remote_file != expected_remote_file:
+    if record is None:
         return None
 
-    if record is None:
+    if expected_remote_file is not None and record.remote_file != expected_remote_file:
         return None
 
     # The manifest must describe this exact local destination.

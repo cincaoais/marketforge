@@ -175,6 +175,14 @@ def test_verify_without_manifest_returns_none(
 
     assert verify_raw_file(raw_path) is None
 
+    assert (
+        verify_raw_file(
+            raw_path,
+            expected_remote_file=make_record(tmp_path).remote_file,
+        )
+        is None
+    )
+
 
 def test_verify_wrong_size_returns_none(
     tmp_path,

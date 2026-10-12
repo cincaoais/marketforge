@@ -72,6 +72,7 @@ class MarketForgeClient:
         return self.downloader.download_many(
             plan,
             policy=policy,
+            progress=progress,
         )
 
     def close(self) -> None:

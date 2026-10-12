@@ -106,6 +106,7 @@ def test_client_download_delegates_to_downloader(
     client.downloader.download_many.assert_called_once_with(
         plan,
         policy=None,
+        progress=None,
     )
 
     client.close()

@@ -48,6 +48,20 @@ Verify the installation:
 marketforge --help
 ```
 
+### Database setup (optional for downloading)
+
+`plan`, `download`, `availability` and `archives` work without a database.
+
+`instruments`, `metadata`, `config`, `process`, `datasets` and `merge` need PostgreSQL:
+
+```bash
+export MARKETFORGE_DATABASE_URL="postgresql://user:password@localhost:5432/marketforge"
+
+marketforge database init
+marketforge metadata sync
+marketforge instruments --refresh
+```
+
 To update to the latest development version later:
 
 ```bash
